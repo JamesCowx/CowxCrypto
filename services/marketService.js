@@ -204,21 +204,26 @@ async function getSimplePrices(ids) {
     });
   } catch {
     const result = {};
-    for (const id of ids) {
-      try {
-        const res = await fetch(`${COINCAP_BASE}/assets/${id}`, { timeout: 10000 });
-        if (res.ok) {
-          const body = await res.json();
-          const item = body?.data;
-          if (item) {
+    try {
+      const coinCapRes = await fetch(`${COINCAP_BASE}/assets?limit=2000`, { timeout: 20000 });
+      if (coinCapRes.ok) {
+        const body = await coinCapRes.json();
+        const allAssets = Array.isArray(body?.data) ? body.data : [];
+        for (const id of ids) {
+          const match = allAssets.find(a =>
+            a.id === id ||
+            a.symbol.toLowerCase() === id.toLowerCase() ||
+            a.name.toLowerCase() === id.replace(/-/g, ' ')
+          );
+          if (match) {
             result[id] = {
-              usd: parseFloat(item.priceUsd) || 0,
-              usd_24h_change: parseFloat(item.changePercent24Hr) || 0,
+              usd: parseFloat(match.priceUsd) || 0,
+              usd_24h_change: parseFloat(match.changePercent24Hr) || 0,
             };
           }
         }
-      } catch {}
-    }
+      }
+    } catch {}
     return result;
   }
 }

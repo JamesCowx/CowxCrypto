@@ -76,7 +76,9 @@ async function refreshCache(isRetry = false) {
     try { global = await marketService.getGlobalData(); } catch (e) { console.error('global fail:', e.message); }
 
     const enrichedTrending = trending.map(t => {
-      const match = topCoins.find(c => c.id === t.id);
+      let match = topCoins.find(c => c.id === t.id);
+      if (!match) match = topCoins.find(c => c.symbol.toLowerCase() === (t.symbol || '').toLowerCase());
+      if (!match) match = topCoins.find(c => c.name?.toLowerCase() === (t.name || '').toLowerCase());
       if (match) {
         return { ...t, price: match.current_price, change24h: match.price_change_24h, image: match.image };
       }
