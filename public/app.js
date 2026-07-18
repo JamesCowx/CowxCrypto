@@ -315,7 +315,8 @@ async function fetchDashboard() {
     renderDominance(data.market.global);
     renderWhales(data.whales.portfolios);
     renderTrades(data.whales.recentTrades);
-    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleString();
+    const provLabel = data.provider === 'coincap' ? 'CoinCap' : 'CoinGecko';
+    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleString() + '  ·  ' + provLabel;
   } catch (err) {
     document.getElementById('errorBanner').innerHTML = '⚠ Connection error. Retrying...';
     document.getElementById('errorBanner').style.display = 'flex';

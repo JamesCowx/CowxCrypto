@@ -95,7 +95,8 @@ async function refreshCache() {
     };
     cacheTimestamp = Date.now();
     rateLimited = false;
-    console.log(`Cache OK: ${signalsWithWhale.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
+    const prov = marketService.isUsingCoinCap() ? 'coincap' : 'coingecko';
+    console.log(`[${prov}] Cache OK: ${signalsWithWhale.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
   } catch (err) {
     if (err.message && err.message.includes('Rate limited')) {
       rateLimited = true;
@@ -134,6 +135,7 @@ app.get('/api/dashboard', (req, res) => {
     whales: { portfolios: cachedData.portfolios, recentTrades: cachedData.trades },
     updatedAt: new Date(cacheTimestamp).toISOString(),
     rateLimited,
+    provider: marketService.isUsingCoinCap() ? 'coincap' : 'coingecko',
   });
 });
 
