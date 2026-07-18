@@ -46,28 +46,31 @@ function incorporateWhaleSignals(signals, trades) {
   return signals;
 }
 
-async function refreshCache() {
+async function refreshCache(isRetry = false) {
   if (refreshing) return;
   refreshing = true;
   try {
-    const topCoins = await marketService.getTopCoins(100);
+    let topCoins = [], trending = [], global = null, signals = [], portfolios = [], trades = [];
+
+    try { topCoins = await marketService.getTopCoins(100); } catch (e) { console.error('topCoins fail:', e.message); }
+    if (!topCoins.length) { throw new Error('No coin data from any provider'); }
+
     const top30 = topCoins.slice(0, 30);
-    const signals = generateSignals(top30);
-    const portfolios = getWhalePortfolios(top30);
-    const trades = getWhaleTrades(portfolios, top30);
-    const signalsWithWhale = incorporateWhaleSignals(signals, trades);
-    const trending = await marketService.getTrendingCoins();
-    const global = await marketService.getGlobalData();
+    try { signals = generateSignals(top30); } catch (e) { console.error('signals fail:', e.message); }
+    try { portfolios = getWhalePortfolios(top30); } catch (e) { console.error('portfolios fail:', e.message); }
+    try { trades = getWhaleTrades(portfolios, top30); } catch (e) { console.error('trades fail:', e.message); }
+
+    if (signals.length) {
+      try { signals = incorporateWhaleSignals(signals, trades); } catch (e) { console.error('whale signals fail:', e.message); }
+    }
+
+    try { trending = await marketService.getTrendingCoins(); } catch (e) { console.error('trending fail:', e.message); }
+    try { global = await marketService.getGlobalData(); } catch (e) { console.error('global fail:', e.message); }
 
     const enrichedTrending = trending.map(t => {
       const match = topCoins.find(c => c.id === t.id);
       if (match) {
-        return {
-          ...t,
-          price: match.current_price,
-          change24h: match.price_change_24h,
-          image: match.image,
-        };
+        return { ...t, price: match.current_price, change24h: match.price_change_24h, image: match.image };
       }
       return { ...t };
     });
@@ -85,26 +88,21 @@ async function refreshCache() {
       } catch (_) {}
     }
 
-    cachedData = {
-      topCoins,
-      trending: enrichedTrending,
-      global,
-      signals: signalsWithWhale,
-      portfolios,
-      trades,
-    };
+    cachedData = { topCoins, trending: enrichedTrending, global, signals, portfolios, trades };
     cacheTimestamp = Date.now();
     rateLimited = false;
     const prov = marketService.isUsingCoinCap() ? 'coincap' : 'coingecko';
-    console.log(`[${prov}] Cache OK: ${signalsWithWhale.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
+    console.log(`[${prov}] Cache OK: ${signals.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
   } catch (err) {
-    if (err.message && err.message.includes('Rate limited')) {
+    const msg = err && err.message ? err.message : String(err);
+    if (msg.includes('Rate limited')) {
       rateLimited = true;
       console.log('Rate limited - retry in 60s');
+      setTimeout(() => refreshCache(true), 60000);
     } else {
-      console.error('Cache error:', err.message);
+      console.error('Cache error:', msg, '- retry in 15s');
+      setTimeout(() => refreshCache(true), 15000);
     }
-    setTimeout(refreshCache, 60000);
   } finally {
     refreshing = false;
   }
@@ -118,21 +116,23 @@ app.get('/api/dashboard', (req, res) => {
       message: rateLimited ? 'Rate limited by CoinGecko. Auto-retrying...' : 'Fetching live market data...',
     });
   }
-  const buys = cachedData.signals.filter(s => s.signalType === 'strong_buy' || s.signalType === 'buy').slice(0, 15);
-  const sells = cachedData.signals.filter(s => s.signalType === 'sell' || s.signalType === 'weak_sell').slice(0, 15);
-  const sorted24h = [...cachedData.topCoins]
+  const sigs = cachedData.signals || [];
+  const coins = cachedData.topCoins || [];
+  const buys = sigs.filter(s => s.signalType === 'strong_buy' || s.signalType === 'buy').slice(0, 15);
+  const sells = sigs.filter(s => s.signalType === 'sell' || s.signalType === 'weak_sell').slice(0, 15);
+  const sorted24h = [...coins]
     .filter(c => c.price_change_24h != null)
     .sort((a, b) => (b.price_change_24h || 0) - (a.price_change_24h || 0));
   res.json({
     market: {
-      topCoins: cachedData.topCoins.slice(0, 50),
-      trending: cachedData.trending,
-      global: cachedData.global,
+      topCoins: coins.slice(0, 50),
+      trending: cachedData.trending || [],
+      global: cachedData.global || {},
       gainers: sorted24h.slice(0, 5),
       losers: sorted24h.slice(-5).reverse(),
     },
-    signals: { buys, sells, all: cachedData.signals.slice(0, 30) },
-    whales: { portfolios: cachedData.portfolios, recentTrades: cachedData.trades },
+    signals: { buys, sells, all: sigs.slice(0, 30) },
+    whales: { portfolios: cachedData.portfolios || [], recentTrades: cachedData.trades || [] },
     updatedAt: new Date(cacheTimestamp).toISOString(),
     rateLimited,
     provider: marketService.isUsingCoinCap() ? 'coincap' : 'coingecko',

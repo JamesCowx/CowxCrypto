@@ -25,29 +25,34 @@ async function rateLimitedFetch(url) {
 }
 
 function generateSyntheticSparkline(currentPrice, change24h) {
-  if (!currentPrice || currentPrice <= 0) return null;
+  if (!currentPrice || currentPrice <= 0 || !isFinite(currentPrice)) return null;
   const points = 168;
-  const sparkline = [];
-  const changeFraction = change24h != null ? change24h / 100 : 0;
+  let changeFraction = change24h != null ? change24h / 100 : 0;
+  changeFraction = Math.max(-0.95, Math.min(0.95, changeFraction));
   const startPrice = currentPrice / (1 + changeFraction);
+  if (!isFinite(startPrice) || startPrice <= 0) return null;
   let drift = changeFraction / points;
   const vol = Math.abs(changeFraction) * 0.3 + 0.002;
   let price = startPrice;
+  const sparkline = [];
   for (let i = 0; i < points; i++) {
     const noise = (Math.random() - 0.5) * vol * price;
     const trend = drift * price;
     price = price + trend + noise;
-    if (price < 0) price = 0.0001;
+    if (!isFinite(price) || price < 0) price = 0.0001;
     sparkline.push(price);
   }
   const lastVal = sparkline[sparkline.length - 1];
-  if (lastVal !== currentPrice) {
+  if (lastVal !== currentPrice && isFinite(lastVal) && lastVal > 0) {
     const ratio = currentPrice / lastVal;
-    for (let i = 0; i < sparkline.length; i++) {
-      sparkline[i] *= Math.pow(ratio, i / (sparkline.length - 1));
+    if (isFinite(ratio) && ratio > 0) {
+      for (let i = 0; i < sparkline.length; i++) {
+        sparkline[i] *= Math.pow(ratio, i / (sparkline.length - 1));
+      }
     }
   }
-  return sparkline;
+  const allFinite = sparkline.every(v => isFinite(v));
+  return allFinite ? sparkline : null;
 }
 
 async function tryCoinGecko(action) {
