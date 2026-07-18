@@ -10,11 +10,19 @@ const PORT = process.env.PORT || 3001;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-let cachedData = null;
-let cacheTimestamp = 0;
+const EMPTY_CACHE = {
+  topCoins: [], trending: [], global: {
+    active_cryptocurrencies: 0, total_market_cap: 0, total_volume: 0,
+    market_cap_percentage: {}, market_cap_change_percentage_24h: null,
+  }, signals: [], portfolios: [], trades: [],
+};
+
+let cachedData = { ...EMPTY_CACHE };
+let cacheTimestamp = Date.now();
 const CACHE_TTL = 180000;
 let rateLimited = false;
 let refreshing = false;
+let cacheReady = false;
 
 function incorporateWhaleSignals(signals, trades) {
   for (const signal of signals) {
@@ -90,6 +98,7 @@ async function refreshCache(isRetry = false) {
 
     cachedData = { topCoins, trending: enrichedTrending, global, signals, portfolios, trades };
     cacheTimestamp = Date.now();
+    cacheReady = true;
     rateLimited = false;
     const prov = marketService.isUsingCoinCap() ? 'coincap' : 'coingecko';
     console.log(`[${prov}] Cache OK: ${signals.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
@@ -110,11 +119,7 @@ async function refreshCache(isRetry = false) {
 
 app.get('/api/dashboard', (req, res) => {
   if (!cachedData) {
-    return res.json({
-      loading: true,
-      rateLimited,
-      message: rateLimited ? 'Rate limited by CoinGecko. Auto-retrying...' : 'Fetching live market data...',
-    });
+    return res.json({ loading: true, rateLimited, message: 'Initializing...' });
   }
   const sigs = cachedData.signals || [];
   const coins = cachedData.topCoins || [];
@@ -135,12 +140,13 @@ app.get('/api/dashboard', (req, res) => {
     whales: { portfolios: cachedData.portfolios || [], recentTrades: cachedData.trades || [] },
     updatedAt: new Date(cacheTimestamp).toISOString(),
     rateLimited,
+    cacheReady,
     provider: marketService.isUsingCoinCap() ? 'coincap' : 'coingecko',
   });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, hasCache: !!cachedData, rateLimited, updatedAt: cacheTimestamp ? new Date(cacheTimestamp).toISOString() : null });
+  res.json({ ok: true, cacheReady, rateLimited, updatedAt: new Date(cacheTimestamp).toISOString() });
 });
 
 refreshCache();

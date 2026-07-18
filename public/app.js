@@ -293,6 +293,12 @@ async function fetchDashboard() {
       setTimeout(fetchDashboard, 5000);
       return;
     }
+    if (!data.cacheReady) {
+      document.getElementById('errorBanner').innerHTML = '⚠ Connecting to data sources...';
+      document.getElementById('errorBanner').style.display = 'flex';
+      setTimeout(fetchDashboard, 5000);
+      return;
+    }
     if (data.rateLimited) {
       document.getElementById('errorBanner').innerHTML = '⚠ CoinGecko rate limit hit. Retrying in 60s...';
       document.getElementById('errorBanner').style.display = 'flex';
