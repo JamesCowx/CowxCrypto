@@ -4,9 +4,6 @@ const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const COINCAP_BASE = 'https://api.coincap.io/v2';
 const MIN_REQUEST_INTERVAL = 4000;
 let lastRequestTime = 0;
-let usingCoinCap = false;
-let coinCapSwitchTime = 0;
-const COINCAP_COOLDOWN = 300000;
 
 async function rateLimitedFetch(url) {
   const now = Date.now();
@@ -14,12 +11,7 @@ async function rateLimitedFetch(url) {
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastRequestTime = Date.now();
   const res = await fetch(url, { timeout: 15000 });
-  if (res.status === 429) {
-    lastRequestTime = Date.now() + 60000;
-    usingCoinCap = true;
-    coinCapSwitchTime = Date.now();
-    throw new Error('Rate limited by CoinGecko');
-  }
+  if (res.status === 429) throw new Error('429');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -51,30 +43,7 @@ function generateSyntheticSparkline(currentPrice, change24h) {
       }
     }
   }
-  const allFinite = sparkline.every(v => isFinite(v));
-  return allFinite ? sparkline : null;
-}
-
-async function tryCoinGecko(action) {
-  if (usingCoinCap) {
-    if (Date.now() - coinCapSwitchTime > COINCAP_COOLDOWN) {
-      usingCoinCap = false;
-    } else {
-      throw new Error('Using CoinCap fallback');
-    }
-  }
-  try {
-    return await action();
-  } catch (err) {
-    if (err.message === 'Rate limited by CoinGecko') {
-      throw err;
-    }
-    if (!usingCoinCap) {
-      usingCoinCap = true;
-      coinCapSwitchTime = Date.now();
-    }
-    throw err;
-  }
+  return sparkline.every(v => isFinite(v)) ? sparkline : null;
 }
 
 function coinCapToCoin(c) {
@@ -93,12 +62,28 @@ function coinCapToCoin(c) {
   };
 }
 
+async function fetchCoinCapAssets(limit = 100) {
+  const res = await fetch(`${COINCAP_BASE}/assets?limit=${limit}`, { timeout: 20000 });
+  if (!res.ok) throw new Error(`CoinCap HTTP ${res.status}`);
+  const body = await res.json();
+  const list = Array.isArray(body?.data) ? body.data : [];
+  if (!list.length) throw new Error('CoinCap empty');
+  return list;
+}
+
+function coinCapAssetToCoin(c) {
+  const coin = coinCapToCoin(c);
+  coin.image = `https://assets.coincap.io/assets/icons/${(c.symbol||'').toLowerCase()}@2x.png`;
+  coin.sparkline = generateSyntheticSparkline(coin.current_price, coin.price_change_24h);
+  return coin;
+}
+
 async function getTopCoins(limit = 50) {
-  return await tryCoinGecko(async () => {
+  try {
     const raw = await rateLimitedFetch(
       `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=true&price_change_percentage=1h%2C24h%2C7d`
     );
-    if (!Array.isArray(raw)) throw new Error('Invalid CoinGecko response');
+    if (!Array.isArray(raw)) throw new Error('Invalid response');
     return raw.map(coin => ({
       id: coin.id, symbol: coin.symbol, name: coin.name, image: coin.image,
       current_price: coin.current_price, market_cap: coin.market_cap,
@@ -110,20 +95,10 @@ async function getTopCoins(limit = 50) {
       ath: coin.ath, ath_change_percentage: coin.ath_change_percentage,
       circulating_supply: coin.circulating_supply,
     }));
-  }).catch(async () => {
-    const coinCapRes = await fetch(`${COINCAP_BASE}/assets?limit=${Math.min(limit, 100)}`, { timeout: 20000 });
-    if (!coinCapRes.ok) throw new Error(`CoinCap HTTP ${coinCapRes.status}`);
-    const body = await coinCapRes.json();
-    const list = Array.isArray(body?.data) ? body.data : [];
-    if (!list.length) throw new Error('CoinCap empty data');
-    return list.map(c => {
-      const coin = coinCapToCoin(c);
-      coin.image = `https://assets.coincap.io/assets/icons/${(c.symbol||'').toLowerCase()}@2x.png`;
-      coin.price_change_7d = null;
-      coin.sparkline = generateSyntheticSparkline(coin.current_price, coin.price_change_24h);
-      return coin;
-    });
-  });
+  } catch {
+    const list = await fetchCoinCapAssets(Math.min(limit, 100));
+    return list.map(coinCapAssetToCoin);
+  }
 }
 
 async function getTrendingCoins() {
@@ -134,29 +109,23 @@ async function getTrendingCoins() {
       id: c.item.id, name: c.item.name, symbol: c.item.symbol,
       market_cap_rank: c.item.market_cap_rank, score: c.item.score,
     }));
-  } catch (err) {
-    if (usingCoinCap) {
-      const coinCapRes = await fetch(`${COINCAP_BASE}/assets?limit=12`, { timeout: 20000 });
-      if (!coinCapRes.ok) return [];
-      const body = await coinCapRes.json();
-      const list = Array.isArray(body?.data) ? body.data : [];
-      return list.map((c, i) => ({
-        id: c.id, name: c.name, symbol: c.symbol,
-        market_cap_rank: parseInt(c.rank) || i + 1, score: list.length - i,
-        price: parseFloat(c.priceUsd) || null,
-        change24h: parseFloat(c.changePercent24Hr) || null,
-        image: `https://assets.coincap.io/assets/icons/${(c.symbol||'').toLowerCase()}@2x.png`,
-      }));
-    }
-    throw err;
+  } catch {
+    const list = await fetchCoinCapAssets(12);
+    return list.map((c, i) => ({
+      id: c.id, name: c.name, symbol: c.symbol,
+      market_cap_rank: parseInt(c.rank) || i + 1, score: list.length - i,
+      price: parseFloat(c.priceUsd) || null,
+      change24h: parseFloat(c.changePercent24Hr) || null,
+      image: `https://assets.coincap.io/assets/icons/${(c.symbol||'').toLowerCase()}@2x.png`,
+    }));
   }
 }
 
 async function getGlobalData() {
-  return await tryCoinGecko(async () => {
+  try {
     const raw = await rateLimitedFetch(`${COINGECKO_BASE}/global`);
     const d = raw?.data;
-    if (!d) throw new Error('Invalid CoinGecko global response');
+    if (!d) throw new Error('Invalid response');
     return {
       active_cryptocurrencies: d.active_cryptocurrencies || 0,
       total_market_cap: d.total_market_cap?.usd || 0,
@@ -164,12 +133,8 @@ async function getGlobalData() {
       market_cap_percentage: d.market_cap_percentage || {},
       market_cap_change_percentage_24h: d.market_cap_change_percentage_24h_usd || null,
     };
-  }).catch(async () => {
-    const coinCapRes = await fetch(`${COINCAP_BASE}/assets?limit=100`, { timeout: 20000 });
-    if (!coinCapRes.ok) throw new Error(`CoinCap HTTP ${coinCapRes.status}`);
-    const body = await coinCapRes.json();
-    const list = Array.isArray(body?.data) ? body.data : [];
-    if (!list.length) throw new Error('CoinCap empty data for global');
+  } catch {
+    const list = await fetchCoinCapAssets(100);
     let totalVolume = 0, totalMcap = 0;
     let btcMcap = 0, ethMcap = 0, usdtMcap = 0, bnbMcap = 0;
     for (const c of list) {
@@ -193,37 +158,31 @@ async function getGlobalData() {
       },
       market_cap_change_percentage_24h: null,
     };
-  });
+  }
 }
 
 async function getSimplePrices(ids) {
   if (!ids || ids.length === 0) return {};
   try {
-    return await tryCoinGecko(async () => {
-      const raw = await rateLimitedFetch(
-        `${COINGECKO_BASE}/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true`
-      );
-      return raw || {};
-    });
+    const raw = await rateLimitedFetch(
+      `${COINGECKO_BASE}/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true`
+    );
+    return raw || {};
   } catch {
     const result = {};
     try {
-      const coinCapRes = await fetch(`${COINCAP_BASE}/assets?limit=2000`, { timeout: 20000 });
-      if (coinCapRes.ok) {
-        const body = await coinCapRes.json();
-        const allAssets = Array.isArray(body?.data) ? body.data : [];
-        for (const id of ids) {
-          const match = allAssets.find(a =>
-            a.id === id ||
-            a.symbol.toLowerCase() === id.toLowerCase() ||
-            a.name.toLowerCase() === id.replace(/-/g, ' ')
-          );
-          if (match) {
-            result[id] = {
-              usd: parseFloat(match.priceUsd) || 0,
-              usd_24h_change: parseFloat(match.changePercent24Hr) || 0,
-            };
-          }
+      const list = await fetchCoinCapAssets(2000);
+      for (const id of ids) {
+        const match = list.find(a =>
+          a.id === id ||
+          a.symbol.toLowerCase() === id.toLowerCase() ||
+          a.name.toLowerCase() === id.replace(/-/g, ' ')
+        );
+        if (match) {
+          result[id] = {
+            usd: parseFloat(match.priceUsd) || 0,
+            usd_24h_change: parseFloat(match.changePercent24Hr) || 0,
+          };
         }
       }
     } catch {}
@@ -231,6 +190,8 @@ async function getSimplePrices(ids) {
   }
 }
 
-function isUsingCoinCap() { return usingCoinCap; }
+function getProvider() {
+  return 'auto';
+}
 
-module.exports = { getTopCoins, getTrendingCoins, getGlobalData, getSimplePrices, isUsingCoinCap };
+module.exports = { getTopCoins, getTrendingCoins, getGlobalData, getSimplePrices, getProvider };

@@ -104,11 +104,10 @@ async function refreshCache(isRetry = false) {
     cacheTimestamp = Date.now();
     cacheReady = true;
     rateLimited = false;
-    const prov = marketService.isUsingCoinCap() ? 'coincap' : 'coingecko';
-    console.log(`[${prov}] Cache OK: ${signals.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
+    console.log(`Cache OK: ${signals.length} signals, ${portfolios.length} portfolios, ${trades.length} trades`);
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
-    if (msg.includes('Rate limited')) {
+    if (msg === '429' || msg.includes('rate limit')) {
       rateLimited = true;
       console.log('Rate limited - retry in 60s');
       setTimeout(() => refreshCache(true), 60000);
@@ -145,7 +144,6 @@ app.get('/api/dashboard', (req, res) => {
     updatedAt: new Date(cacheTimestamp).toISOString(),
     rateLimited,
     cacheReady,
-    provider: marketService.isUsingCoinCap() ? 'coincap' : 'coingecko',
   });
 });
 
