@@ -143,6 +143,9 @@ async function getTrendingCoins() {
       return list.map((c, i) => ({
         id: c.id, name: c.name, symbol: c.symbol,
         market_cap_rank: parseInt(c.rank) || i + 1, score: list.length - i,
+        price: parseFloat(c.priceUsd) || null,
+        change24h: parseFloat(c.changePercent24Hr) || null,
+        image: `https://assets.coincap.io/assets/icons/${(c.symbol||'').toLowerCase()}@2x.png`,
       }));
     }
     throw err;

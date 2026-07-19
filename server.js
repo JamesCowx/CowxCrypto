@@ -82,6 +82,7 @@ async function refreshCache(isRetry = false) {
       if (match) {
         return { ...t, price: match.current_price, change24h: match.price_change_24h, image: match.image };
       }
+      if (t.price != null) return { ...t, price: t.price, change24h: t.change24h, image: t.image };
       return { ...t };
     });
 
@@ -90,9 +91,10 @@ async function refreshCache(isRetry = false) {
       try {
         const prices = await marketService.getSimplePrices(missingIds);
         for (const t of enrichedTrending) {
-          if (t.price == null && prices[t.id]) {
-            t.price = prices[t.id].usd;
-            t.change24h = prices[t.id].usd_24h_change;
+          const p = prices[t.id];
+          if (t.price == null && p && p.usd != null) {
+            t.price = p.usd;
+            t.change24h = p.usd_24h_change;
           }
         }
       } catch (_) {}

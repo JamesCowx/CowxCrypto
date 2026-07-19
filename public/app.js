@@ -114,16 +114,18 @@ function renderTrending(list) {
   el.innerHTML = list.map((c, i) => {
     const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
     const sp = c.change24h;
+    const hasPrice = c.price !== null && c.price !== undefined && c.price !== 0;
+    const hasChange = sp !== undefined && sp !== null;
     return `<div class="coin-row" style="animation-delay:${i*0.04}s">
       <span class="trending-rank ${rankClass}">#${i+1}</span>
       ${c.image ? coinImg(c.image, c.name) : `<div class="coin-image-wrapper"><span style="font-size:16px">🔥</span></div>`}
       <div class="coin-info">
         <div class="coin-name">${c.name}</div>
-        <div class="coin-symbol">${c.symbol.toUpperCase()} ${c.score !== undefined ? `<span style="color:var(--text-muted);font-size:10px">score ${c.score}</span>` : ''}</div>
+        <div class="coin-symbol">${c.symbol.toUpperCase()} ${c.score !== undefined ? `<span style="color:var(--text-muted);font-size:10px">score ${c.score}</span>` : ''} ${c.market_cap_rank ? `<span style="color:var(--text-muted);font-size:10px">rank #${c.market_cap_rank}</span>` : ''}</div>
       </div>
       <div class="coin-price-col">
-        ${c.price ? `<div class="price">${fmt(c.price)}</div>` : ''}
-        ${sp !== undefined && sp !== null ? `<div class="change" style="color:${chColor(sp)}">${fmtPct(sp)}</div>` : ''}
+        ${hasPrice ? `<div class="price">${fmt(c.price)}</div>` : '<div class="price" style="color:var(--text-muted)">—</div>'}
+        ${hasChange ? `<div class="change" style="color:${chColor(sp)}">${fmtPct(sp)}</div>` : '<div class="change" style="color:var(--text-muted)">—</div>'}
       </div>
     </div>`;
   }).join('');
