@@ -95,7 +95,8 @@ async function getTopCoins(limit = 50) {
       ath: coin.ath, ath_change_percentage: coin.ath_change_percentage,
       circulating_supply: coin.circulating_supply,
     }));
-  } catch {
+  } catch (e) {
+    console.log('[CoinGecko] topCoins fail:', e.message, '-> CoinCap');
     const list = await fetchCoinCapAssets(Math.min(limit, 100));
     return list.map(coinCapAssetToCoin);
   }
@@ -109,7 +110,8 @@ async function getTrendingCoins() {
       id: c.item.id, name: c.item.name, symbol: c.item.symbol,
       market_cap_rank: c.item.market_cap_rank, score: c.item.score,
     }));
-  } catch {
+  } catch (e) {
+    console.log('[CoinGecko] trending fail:', e.message, '-> CoinCap');
     const list = await fetchCoinCapAssets(12);
     return list.map((c, i) => ({
       id: c.id, name: c.name, symbol: c.symbol,
@@ -133,7 +135,8 @@ async function getGlobalData() {
       market_cap_percentage: d.market_cap_percentage || {},
       market_cap_change_percentage_24h: d.market_cap_change_percentage_24h_usd || null,
     };
-  } catch {
+  } catch (e) {
+    console.log('[CoinGecko] global fail:', e.message, '-> CoinCap');
     const list = await fetchCoinCapAssets(100);
     let totalVolume = 0, totalMcap = 0;
     let btcMcap = 0, ethMcap = 0, usdtMcap = 0, bnbMcap = 0;
@@ -168,7 +171,8 @@ async function getSimplePrices(ids) {
       `${COINGECKO_BASE}/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true`
     );
     return raw || {};
-  } catch {
+  } catch (e) {
+    console.log('[CoinGecko] simple/price fail:', e.message, '-> CoinCap');
     const result = {};
     try {
       const list = await fetchCoinCapAssets(2000);
@@ -185,13 +189,9 @@ async function getSimplePrices(ids) {
           };
         }
       }
-    } catch {}
+    } catch (e2) { console.log('[CoinCap] price lookup fail:', e2.message); }
     return result;
   }
 }
 
-function getProvider() {
-  return 'auto';
-}
-
-module.exports = { getTopCoins, getTrendingCoins, getGlobalData, getSimplePrices, getProvider };
+module.exports = { getTopCoins, getTrendingCoins, getGlobalData, getSimplePrices };

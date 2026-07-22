@@ -39,7 +39,8 @@ function sparklineHTML(prices, color) {
   const w=72, h=28, pad=2;
   const mn=Math.min(...prices), mx=Math.max(...prices), r=mx-mn||1;
   const pts = prices.map((v,i)=>`${pad+(i/(prices.length-1))*(w-2*pad)},${pad+(1-(v-mn)/r)*(h-2*pad)}`).join(' ');
-  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" style="color:${color}"><defs><linearGradient id="sg-${Math.random().toString(36).slice(2,8)}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.08"/><stop offset="100%" stop-color="${color}" stop-opacity="0.5"/></linearGradient></defs><polyline fill="none" stroke="url(#sg-${Math.random().toString(36).slice(2,8)})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
+  const gid = 'sg' + Math.random().toString(36).slice(2,8);
+  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" style="color:${color}"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.08"/><stop offset="100%" stop-color="${color}" stop-opacity="0.5"/></linearGradient></defs><polyline fill="none" stroke="url(#${gid})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
 }
 
 function coinImg(src, alt) {
@@ -67,21 +68,6 @@ function holdHTML(c) {
     ${c.stopLoss ? `<span>SL: <strong style="color:var(--red)">${fmt(c.stopLoss)}</strong></span>` : ''}
     ${c.takeProfit ? `<span>TP: <strong style="color:var(--green)">${fmt(c.takeProfit)}</strong></span>` : ''}
   </div>`;
-}
-
-function animateCounter(el, target, prefix, suffix) {
-  const duration = 800;
-  const start = performance.now();
-  const from = parseFloat(el.dataset.val || 0);
-  function tick(now) {
-    const t = Math.min((now - start) / duration, 1);
-    const ease = 1 - Math.pow(1 - t, 3);
-    const val = from + (target - from) * ease;
-    el.textContent = prefix + val.toFixed(prefix.includes('$') ? 2 : 0) + suffix;
-    if (t < 1) requestAnimationFrame(tick);
-    else { el.dataset.val = target; }
-  }
-  requestAnimationFrame(tick);
 }
 
 function renderHeroStats(data) {
@@ -356,35 +342,10 @@ document.querySelectorAll('.card').forEach(el => {
 
 /* SCROLL REVEAL */
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
-}, { threshold: 0.1 });
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.05 });
 document.querySelectorAll('.fade-section').forEach(el => observer.observe(el));
-
-/* PRICE FLASH EFFECT */
-function flashPrice(el, direction) {
-  const color = direction === 'up' ? 'var(--green)' : 'var(--red)';
-  const glow = direction === 'up' ? 'var(--green-glow)' : 'var(--red-glow)';
-  el.style.color = color;
-  el.style.textShadow = `0 0 10px ${glow}, 0 0 20px ${glow}`;
-  setTimeout(() => {
-    el.style.color = '';
-    el.style.textShadow = '';
-  }, 1000);
-}
-
-/* ANIMATE NUMBERS ON LOAD */
-function animateNumber(el, target, duration = 800) {
-  const start = performance.now();
-  const from = parseFloat(el.textContent.replace(/[^0-9.-]/g, '')) || 0;
-  function update(now) {
-    const progress = Math.min((now - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
-    const current = from + (target - from) * eased;
-    el.textContent = current.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    if (progress < 1) requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
-}
+setTimeout(() => { document.querySelectorAll('.fade-section:not(.visible)').forEach(el => el.classList.add('visible')); }, 2000);
 
 /* ADD DATA PULSE TO LIVE ELEMENTS */
 document.querySelectorAll('.header-stat .value').forEach(el => {
