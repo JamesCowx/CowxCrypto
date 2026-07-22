@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const path = require('path');
 const marketService = require('./services/marketService');
 const { generateSignals } = require('./services/signalEngine');
@@ -7,7 +8,8 @@ const { getWhalePortfolios, getWhaleTrades } = require('./services/portfolioTrac
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(compression());
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
 app.use(express.json());
 
 const EMPTY_CACHE = {
@@ -121,6 +123,7 @@ async function refreshCache(isRetry = false) {
 }
 
 app.get('/api/dashboard', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=120');
   if (!cachedData) {
     return res.json({ loading: true, rateLimited, message: 'Initializing...' });
   }

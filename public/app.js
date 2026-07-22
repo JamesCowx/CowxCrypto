@@ -34,6 +34,10 @@ function rsiColor(n) {
 function sigLabel(t) { return {strong_buy:'STRONG BUY',buy:'BUY',sell:'SELL',weak_sell:'WEAK SELL',neutral:'NEUTRAL'}[t]||t; }
 function sigBadge(t) { return {strong_buy:'badge-strong-buy',buy:'badge-buy',sell:'badge-sell',weak_sell:'badge-weak-sell',neutral:'badge-neutral'}[t]||'badge-neutral'; }
 
+let heroStats = [];
+let priceAlerts = [];
+let lastDashboardData = null;
+
 function sparklineHTML(prices, color) {
   if (!prices || prices.length < 2) return '';
   const w=72, h=28, pad=2;
@@ -59,6 +63,18 @@ function confidenceHTML(val) {
   return `<div class="confidence-bar"><div class="confidence-fill" style="width:${c}%;background:${color}"></div></div>`;
 }
 
+function signalStrengthMeter(ss) {
+  const abs = Math.abs(ss || 0);
+  const max = 8;
+  const filled = Math.min(abs, max);
+  const isBuy = ss >= 0;
+  let html = '<div class="signal-meter" style="width:80px">';
+  for (let i = 0; i < max; i++) {
+    html += `<div class="signal-meter-seg ${i < filled ? (isBuy ? 'active' : 'active red') : 'inactive'}"></div>`;
+  }
+  return html + '</div>';
+}
+
 function holdHTML(c) {
   if (!c.holdDuration || c.holdDuration === '-') return '';
   const retColor = c.estimatedReturn >= 0 ? 'var(--green)' : 'var(--red)';
@@ -78,6 +94,7 @@ function renderHeroStats(data) {
   const eth = data.market.topCoins.find(c => c.id === 'ethereum');
   const buys = data.signals.buys?.length || 0;
   const sells = data.signals.sells?.length || 0;
+  const existed = el.innerHTML !== '';
   el.innerHTML = `
     <div class="hero-stat">
       <div class="hero-stat-value" id="heroMcap">${fmtCompact(g.total_market_cap)}</div>
@@ -98,6 +115,24 @@ function renderHeroStats(data) {
       <div class="hero-stat-label">Coins Tracked</div>
       <div class="hero-stat-change" style="color:var(--text-muted)">${g.market_cap_percentage?.btc?.toFixed(1) || '—'}% BTC dom</div>
     </div>`;
+  if (existed) {
+    heroStats.forEach(hs => {
+      const el = document.getElementById(hs.id);
+      const prev = hs.prev;
+      const curr = hs.val;
+      if (el && prev !== curr) {
+        el.classList.remove('price-pulse-up', 'price-pulse-down');
+        void el.offsetWidth;
+        el.classList.add(curr > prev ? 'price-pulse-up' : 'price-pulse-down');
+      }
+      hs.prev = hs.val;
+    });
+  }
+  heroStats.length = 0;
+  heroStats.push(
+    { id: 'heroMcap', val: g.total_market_cap || 0, prev: heroStats.find(h => h.id === 'heroMcap')?.val || 0 },
+    { id: 'heroVol', val: g.total_volume || 0, prev: heroStats.find(h => h.id === 'heroVol')?.val || 0 },
+  );
 }
 
 function renderTicker(coins) {
@@ -119,13 +154,16 @@ function renderSigList(list, elId, countId) {
     const color = sp >= 0 ? '#22d07a' : '#ef4444';
     const glow = c.signalType === 'strong_buy' ? ' glow-strong-buy' : '';
     const confColor = (c.confidence || 0) >= 70 ? '#22d07a' : (c.confidence || 0) >= 50 ? '#f5a623' : '#4a8cff';
-    return `<div class="coin-row${glow}" style="animation-delay:${i*0.04}s">
+    const sigMeter = signalStrengthMeter(c.signalStrength);
+    const bbInfo = c.bollingerBands ? `<div class="bb-minibar" style="margin-top:2px"><div class="bb-pointer" style="left:${Math.max(0,Math.min(100,(c.bollingerBands.position||50)))}%"></div></div>` : '';
+    return `<div class="coin-row${glow}" style="animation-delay:${i*0.04}s" data-coin="${c.coinId}" onclick="showCoinDetail('${c.coinId}')">
       ${coinImg(c.image, c.name)}
       ${signalRingHTML(c.confidence, confColor)}
       <div class="coin-info">
         <div class="coin-name">${c.name}</div>
-        <div class="coin-symbol">${c.symbol.toUpperCase()} ${c.rsi !== null && c.rsi !== undefined ? `<span style="color:${rsiColor(c.rsi)}">RSI ${c.rsi.toFixed(1)}</span>` : ''} ${c.trend ? `<span style="color:var(--text-muted);font-size:10px">${c.trend}</span>` : ''}</div>
+        <div class="coin-symbol">${c.symbol.toUpperCase()} ${c.rsi !== null && c.rsi !== undefined ? `<span style="color:${rsiColor(c.rsi)}">RSI ${c.rsi.toFixed(1)}</span>` : ''} ${c.stochRsi != null ? `<span style="color:${rsiColor(c.stochRsi)}">Stoch ${c.stochRsi.toFixed(1)}</span>` : ''} ${c.trend ? `<span style="color:var(--text-muted);font-size:10px">${c.trend}</span>` : ''}</div>
         ${holdHTML(c)}
+        ${sigMeter}${bbInfo}
         ${c.confidence ? confidenceHTML(c.confidence) : ''}
       </div>
       ${c.sparkline ? sparklineHTML(c.sparkline, color) : ''}
@@ -144,7 +182,7 @@ function renderMarket(coins) {
   if (!coins || !coins.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No data</div>'; return; }
   el.innerHTML = coins.map((c, i) => {
     const sp = c.price_change_24h || 0;
-    return `<div class="coin-row" style="animation-delay:${i*0.02}s">
+    return `<div class="coin-row" style="animation-delay:${i*0.02}s" data-coin="${c.id}" onclick="showCoinDetail('${c.id}')">
       <span class="coin-rank">#${c.market_cap_rank || '-'}</span>
       ${coinImg(c.image, c.name)}
       <div class="coin-info"><div class="coin-name">${c.name}</div><div class="coin-symbol">${c.symbol.toUpperCase()}</div></div>
@@ -165,7 +203,7 @@ function renderTrending(list) {
     const sp = c.change24h;
     const hasPrice = c.price !== null && c.price !== undefined && c.price !== 0;
     const hasChange = sp !== undefined && sp !== null;
-    return `<div class="coin-row" style="animation-delay:${i*0.04}s">
+    return `<div class="coin-row" style="animation-delay:${i*0.04}s" data-coin="${c.id}" onclick="showCoinDetail('${c.id}')">
       <span class="trending-rank ${rankClass}">#${i+1}</span>
       ${c.image ? coinImg(c.image, c.name) : `<div class="coin-image-wrapper"><span style="font-size:16px">🔥</span></div>`}
       <div class="coin-info">
@@ -218,23 +256,33 @@ function renderDominance(global) {
 function renderWhales(portfolios) {
   const el = document.getElementById('whalesList');
   if (!portfolios || !portfolios.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No data</div>'; return; }
-  el.innerHTML = portfolios.map((w, i) => {
+  const maxTotal = Math.max(...portfolios.map(w => w.totalValue), 1);
+  el.innerHTML = `<div class="whales-grid">${portfolios.map((w, i) => {
     const maxAlloc = Math.max(...w.holdings.map(h=>h.allocation||0), 1);
-    return `<div class="whale-card" style="animation-delay:${i*0.05}s">
+    return `<div class="whale-card" style="animation-delay:${i*0.04}s">
       <div class="whale-header">
         <div class="whale-name">${w.name}</div>
-        <span class="whale-strategy">${w.strategy} · ${w.risk}</span>
+        <div><span class="whale-strategy">${w.strategy}</span> <span class="whale-size">${w.size||'medium'}</span></div>
       </div>
-      <div class="whale-value">${fmtCompact(w.totalValue)} <span style="color:${chColor(w.pnl24h)};font-weight:600">${fmtPct(w.pnl24h)}</span> <span style="color:var(--text-muted)">24h</span> <span style="color:${chColor(w.pnl7d)};font-weight:600">${fmtPct(w.pnl7d)}</span> <span style="color:var(--text-muted)">7d</span></div>
-      <div class="whale-holdings">${w.holdings.slice(0,5).map(h => `
+      <div class="whale-value">
+        <span style="font-weight:700">${fmtCompact(w.totalValue)}</span>
+        <span style="color:${chColor(w.pnl24h)};font-weight:600;margin-left:8px">${fmtPct(w.pnl24h)}</span>
+        <span style="color:var(--text-muted);font-size:10px"> 24h</span>
+        <span style="color:${chColor(w.pnl7d)};font-weight:600;margin-left:4px">${fmtPct(w.pnl7d)}</span>
+        <span style="color:var(--text-muted);font-size:10px"> 7d</span>
+      </div>
+      <div style="margin:6px 0;height:2px;background:rgba(255,255,255,0.03);border-radius:1px">
+        <div style="height:100%;width:${(w.totalValue/maxTotal)*100}%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:1px"></div>
+      </div>
+      <div class="whale-holdings">${w.holdings.slice(0,3).map(h => `
         <div class="whale-holding">
           <div><span class="name">${h.name}</span> <span class="alloc">${(h.allocation||0).toFixed(1)}%</span></div>
-          <div style="color:var(--text-primary);font-weight:500">${fmt(h.valueUsd)}</div>
+          <div style="color:var(--text-primary);font-weight:500;font-size:10px">${fmtCompact(h.valueUsd)}</div>
         </div>
         <div class="alloc-bar"><div class="alloc-fill" style="width:${(h.allocation/maxAlloc)*100}%"></div></div>`).join('')}
       </div>
     </div>`;
-  }).join('');
+  }).join('')}</div>`;
 }
 
 function renderTrades(trades) {
@@ -364,7 +412,207 @@ document.querySelectorAll('.card, .hero-stat').forEach(card => {
   });
 });
 
-/* API */
+/* COIN DETAIL MODAL */
+function showCoinDetail(coinId) {
+  if (!lastDashboardData) return;
+  const coin = lastDashboardData.market?.topCoins?.find(c => c.id === coinId)
+    || lastDashboardData.market?.trending?.find(c => c.id === coinId);
+  const sig = lastDashboardData.signals?.all?.find(s => s.coinId === coinId);
+  if (!coin) return;
+
+  const price = coin.current_price;
+  const sp24 = coin.price_change_24h || 0;
+  const sp7 = coin.price_change_7d || 0;
+  const color = sp24 >= 0 ? 'var(--green)' : 'var(--red)';
+
+  let indicatorsHTML = '';
+  if (sig) {
+    const rsiColor = sig.rsi < 30 ? 'var(--green)' : sig.rsi > 70 ? 'var(--red)' : sig.rsi > 60 ? 'var(--yellow)' : 'var(--text-muted)';
+    const stochColor = sig.stochRsi != null ? (sig.stochRsi < 20 ? 'var(--green)' : sig.stochRsi > 80 ? 'var(--red)' : 'var(--text-muted)') : 'var(--text-muted)';
+    indicatorsHTML = `
+      <div class="modal-indicators">
+        <div class="modal-indicator"><div class="modal-indicator-label">RSI (14)</div><div class="modal-indicator-value" style="color:${rsiColor}">${sig.rsi?.toFixed(1) || '—'}</div></div>
+        <div class="modal-indicator"><div class="modal-indicator-label">Stoch RSI</div><div class="modal-indicator-value" style="color:${stochColor}">${sig.stochRsi?.toFixed(1) || '—'}</div></div>
+        <div class="modal-indicator"><div class="modal-indicator-label">Volatility</div><div class="modal-indicator-value">${sig.volatility != null ? sig.volatility + '%' : '—'}</div></div>
+      </div>`;
+  }
+
+  let bbHTML = '';
+  if (sig?.bollingerBands) {
+    const bb = sig.bollingerBands;
+    const pos = Math.max(0, Math.min(100, bb.position || 50));
+    bbHTML = `
+      <div style="margin:12px 0;padding:14px;background:rgba(255,255,255,0.01);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Bollinger Bands</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
+          <span style="color:var(--red)">Lower: ${fmt(bb.lower)}</span>
+          <span style="color:var(--text-secondary)">MA: ${fmt(bb.middle)}</span>
+          <span style="color:var(--green)">Upper: ${fmt(bb.upper)}</span>
+        </div>
+        <div class="bb-minibar" style="height:24px;opacity:0.5"><div class="bb-pointer" style="left:${pos}%;height:26px"></div></div>
+        <div style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:4px">Price in band: ${bb.position?.toFixed(1)}% · Width: ${bb.width?.toFixed(1)}%</div>
+      </div>`;
+  }
+
+  let signalHTML = '';
+  if (sig) {
+    signalHTML = `
+      <div style="padding:12px 16px;background:rgba(255,255,255,0.015);border-radius:8px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="badge ${sigBadge(sig.signalType)}">${sigLabel(sig.signalType)}</span>
+          <span style="font-size:11px;color:var(--text-muted)">Confidence: <strong style="color:var(--text-primary)">${sig.confidence}%</strong></span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:11px">
+          <span>Hold: <strong style="color:var(--text-primary)">${sig.holdDuration || '—'}</strong></span>
+          <span style="color:${(sig.estimatedReturn||0)>=0?'var(--green)':'var(--red)'}">Est: <strong>${sig.estimatedReturn != null ? fmtPct(sig.estimatedReturn) : '—'}</strong></span>
+          <span>SL: <strong style="color:var(--red)">${fmt(sig.stopLoss)}</strong></span>
+          <span>TP: <strong style="color:var(--green)">${fmt(sig.takeProfit)}</strong></span>
+        </div>
+        ${sig.reasons?.length ? `<div class="signal-reasons" style="margin-top:8px;margin-left:0">${sig.reasons.map(r => `<span class="reason-tag">${r}</span>`).join('')}</div>` : ''}
+      </div>`;
+  }
+
+  const modal = document.getElementById('coinModal');
+  modal.innerHTML = `
+    <div class="coin-detail-modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeCoinModal()">✕</button>
+      <div class="modal-header">
+        ${coin.image ? coinImg(coin.image, coin.name) : '<div class="coin-image-wrapper"><span style="font-size:24px">🪙</span></div>'}
+        <div>
+          <div class="modal-coin-name">${coin.name}</div>
+          <div class="modal-coin-symbol">${coin.symbol?.toUpperCase() || ''} · Rank #${coin.market_cap_rank || '—'}</div>
+        </div>
+      </div>
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-label">Price</div>
+          <div class="modal-stat-value" style="color:${color}">${fmt(price)}</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">24h Change</div>
+          <div class="modal-stat-value" style="color:${color}">${fmtPct(sp24)}</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">Market Cap</div>
+          <div class="modal-stat-value">${fmtCompact(coin.market_cap)}</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">7d Change</div>
+          <div class="modal-stat-value" style="color:${chColor(sp7)}">${fmtPct(sp7)}</div>
+        </div>
+      </div>
+      ${signalHTML}
+      ${indicatorsHTML}
+      ${bbHTML}
+      ${sig?.sparkline ? `<div style="display:flex;justify-content:center;margin-top:12px">${sparklineHTML(sig.sparkline, color)}</div>` : ''}
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function closeCoinModal() {
+  document.getElementById('coinModal').style.display = 'none';
+}
+document.getElementById('coinModal').addEventListener('click', closeCoinModal);
+
+/* PRICE ALERTS */
+function addAlert(coinName, targetPrice) {
+  priceAlerts.push({ coinName, targetPrice: parseFloat(targetPrice), triggered: false, id: Date.now() });
+  saveAlerts();
+  renderAlerts();
+}
+
+function removeAlert(id) {
+  priceAlerts = priceAlerts.filter(a => a.id !== id);
+  saveAlerts();
+  renderAlerts();
+}
+
+function saveAlerts() {
+  try { localStorage.setItem('cowxcrypto_alerts', JSON.stringify(priceAlerts)); } catch (_) {}
+}
+
+function loadAlerts() {
+  try {
+    const raw = localStorage.getItem('cowxcrypto_alerts');
+    if (raw) priceAlerts = JSON.parse(raw);
+  } catch (_) { priceAlerts = []; }
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alertList');
+  if (!priceAlerts.length) { el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">No alerts yet</div>'; return; }
+  el.innerHTML = priceAlerts.map(a => {
+    const triggered = a.triggered ? 'color:var(--green)' : '';
+    return `<div class="alert-item" style="${triggered}">
+      <span>${a.coinName} → <strong>${fmt(a.targetPrice)}</strong> ${a.triggered ? '✓ TRIGGERED' : ''}</span>
+      <span class="alert-remove" onclick="removeAlert(${a.id})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function checkAlerts(coins) {
+  if (!coins || !priceAlerts.length) return;
+  for (const alert of priceAlerts) {
+    if (alert.triggered) continue;
+    const match = coins.find(c =>
+      c.name?.toLowerCase() === alert.coinName.toLowerCase() ||
+      c.symbol?.toLowerCase() === alert.coinName.toLowerCase() ||
+      c.id?.toLowerCase() === alert.coinName.toLowerCase()
+    );
+    if (match && match.current_price) {
+      if (alert.targetPrice >= match.current_price * 0.99 && alert.targetPrice <= match.current_price * 1.01) {
+        alert.triggered = true;
+      }
+    }
+  }
+  saveAlerts();
+}
+
+document.getElementById('alertAddBtn').addEventListener('click', () => {
+  const name = document.getElementById('alertCoin').value.trim();
+  const price = document.getElementById('alertPrice').value;
+  if (name && price && !isNaN(parseFloat(price))) {
+    addAlert(name, parseFloat(price));
+    document.getElementById('alertCoin').value = '';
+    document.getElementById('alertPrice').value = '';
+  }
+});
+
+/* THEME TOGGLE */
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const root = document.documentElement;
+  const isDark = getComputedStyle(root).getPropertyValue('--bg-primary').trim() === '#04060e';
+  if (isDark) {
+    root.style.setProperty('--bg-primary', '#f0f2f5');
+    root.style.setProperty('--bg-secondary', '#e4e6ea');
+    root.style.setProperty('--bg-card', 'rgba(255,255,255,0.7)');
+    root.style.setProperty('--bg-card-hover', 'rgba(255,255,255,0.85)');
+    root.style.setProperty('--text-primary', '#1a1a2e');
+    root.style.setProperty('--text-secondary', '#4a5568');
+    root.style.setProperty('--text-muted', '#8899b0');
+    root.style.setProperty('--border', 'rgba(0,0,0,0.06)');
+    root.style.setProperty('--border-hover', 'rgba(0,0,0,0.1)');
+    document.getElementById('themeToggle').textContent = '☀️';
+    document.body.style.background = '#f0f2f5';
+    document.body.style.color = '#1a1a2e';
+  } else {
+    root.style.setProperty('--bg-primary', '#04060e');
+    root.style.setProperty('--bg-secondary', '#080c1a');
+    root.style.setProperty('--bg-card', 'rgba(8,12,26,0.6)');
+    root.style.setProperty('--bg-card-hover', 'rgba(16,22,42,0.7)');
+    root.style.setProperty('--text-primary', '#e8edf5');
+    root.style.setProperty('--text-secondary', '#7a88a6');
+    root.style.setProperty('--text-muted', '#3a4563');
+    root.style.setProperty('--border', 'rgba(255,255,255,0.03)');
+    root.style.setProperty('--border-hover', 'rgba(255,255,255,0.06)');
+    document.getElementById('themeToggle').textContent = '🌙';
+    document.body.style.background = '#04060e';
+    document.body.style.color = '#e8edf5';
+  }
+});
+
+loadAlerts();
+renderAlerts();
 async function fetchDashboard() {
   try {
     const res = await fetch('/api/dashboard');
@@ -405,6 +653,9 @@ async function fetchDashboard() {
     renderWhales(data.whales.portfolios);
     renderTrades(data.whales.recentTrades);
     document.getElementById('lastUpdate').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleString();
+    lastDashboardData = data;
+    checkAlerts(data.market?.topCoins);
+    renderAlerts();
   } catch (err) {
     document.getElementById('errorBanner').innerHTML = '⚠ Connection error. Retrying...';
     document.getElementById('errorBanner').style.display = 'flex';

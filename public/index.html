@@ -27,6 +27,7 @@
         <span class="live-dot"></span>
       </div>
       <div class="header-stats" id="headerStats">
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
         <div class="header-stat"><span class="label">BTC</span><span class="value" id="btcPrice">—</span></div>
         <div class="header-stat"><span class="label">ETH</span><span class="value" id="ethPrice">—</span></div>
         <div class="header-stat"><span class="label">MCap</span><span class="value" id="totalMcap">—</span></div>
@@ -119,6 +120,7 @@
           <button class="tab" data-tab="market">Market</button>
           <button class="tab" data-tab="whales">Whales</button>
           <button class="tab" data-tab="trades">Trades</button>
+          <button class="tab" data-tab="alerts">Alerts</button>
         </div>
         <div id="tabContent">
           <div class="tab-panel" id="panel-all-signals">
@@ -133,12 +135,26 @@
           <div class="tab-panel" id="panel-trades" style="display:none">
             <div class="scroll-container" id="tradesList"><div class="loading"><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
           </div>
+          <div class="tab-panel" id="panel-alerts" style="display:none">
+            <div style="padding:8px 4px">
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Set price alerts and get notified in-browser when your target is hit.</div>
+              <div class="alert-form">
+                <input type="text" class="alert-input" id="alertCoin" placeholder="Coin name or symbol...">
+                <input type="number" class="alert-input" id="alertPrice" placeholder="Target price ($)" step="any">
+                <button class="alert-btn" id="alertAddBtn">Add Alert</button>
+              </div>
+              <div class="alert-list" id="alertList"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <div class="last-update" id="lastUpdate"></div>
   </div>
+
+  <div id="coinModal" class="modal-overlay" style="display:none"></div>
+
   <script src="/app.js"></script>
 </body>
 </html>
