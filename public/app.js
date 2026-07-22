@@ -313,69 +313,117 @@ function renderMetrics(global) {
     <div class="card metric-box"><div class="metric-value">${btcDom ? btcDom.toFixed(1)+'%' : '—'}</div><div class="metric-label">BTC Dom</div></div>`;
 }
 
-/* CANVAS PARTICLES */
+/* CANVAS PARTICLES - ENHANCED */
 const canvas = document.getElementById('bgCanvas');
 const ctx = canvas.getContext('2d');
-let particles = [];
+let particles = [], mouseX = 0, mouseY = 0, time = 0;
+
 function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 function initParticles() {
   particles = [];
-  const count = Math.min(70, Math.floor(window.innerWidth / 18));
+  const count = Math.min(100, Math.floor(window.innerWidth / 14));
   for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 0.3;
     particles.push({
-      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-      r: Math.random() * 2.5 + 0.5, dx: (Math.random() - 0.5) * 0.35, dy: (Math.random() - 0.5) * 0.35,
-      o: Math.random() * 0.4 + 0.05, hue: Math.random() * 60 + 200,
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      baseX: Math.random() * canvas.width,
+      baseY: Math.random() * canvas.height,
+      r: Math.random() * 3 + 0.8,
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: (Math.random() - 0.5) * 0.2,
+      o: Math.random() * 0.5 + 0.1,
+      hue: [200, 170, 260, 320, 180][Math.floor(Math.random() * 5)],
+      pulse: Math.random() * Math.PI * 2,
     });
   }
 }
+
 function drawParticles() {
+  time += 0.005;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const mx = mouseX || canvas.width / 2;
+  const my = mouseY || canvas.height / 2;
+
   for (const p of particles) {
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${p.hue}, 70%, 60%, ${p.o})`; ctx.fill();
-    p.x += p.dx; p.y += p.dy;
+    p.x += p.vx + (mx - p.x) * 0.0001;
+    p.y += p.vy + (my - p.y) * 0.0001;
+    const driftX = Math.sin(time + p.pulse) * 0.3;
+    const driftY = Math.cos(time + p.pulse) * 0.3;
+    p.x += driftX; p.y += driftY;
+
     if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
     if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+
+    const pulse = Math.sin(time * 3 + p.pulse) * 0.3 + 0.7;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 80%, 65%, ${p.o * pulse})`;
+    ctx.fill();
+
+    // Glow halo
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.o * 0.08 * pulse})`;
+    ctx.fill();
   }
+
+  // Connection lines
   for (let i = 0; i < particles.length; i++) {
     for (let j = i + 1; j < particles.length; j++) {
-      const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 160) {
-        ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y);
+      if (dist < 180) {
         const avgHue = (particles[i].hue + particles[j].hue) / 2;
-        ctx.strokeStyle = `hsla(${avgHue}, 60%, 60%, ${0.06 * (1 - dist / 160)})`; ctx.lineWidth = 0.5; ctx.stroke();
+        const alpha = 0.07 * (1 - dist / 180);
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `hsla(${avgHue}, 70%, 65%, ${alpha})`;
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
       }
     }
   }
   requestAnimationFrame(drawParticles);
 }
+
+document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
 resizeCanvas(); initParticles(); drawParticles();
 
-/* CURSOR GLOW */
+/* CURSOR GLOW - SMOOTH FOLLOW */
+let glowX = -1000, glowY = -1000;
 document.addEventListener('mousemove', e => {
   const glow = document.getElementById('cursorGlow');
-  glow.style.left = e.clientX + 'px';
-  glow.style.top = e.clientY + 'px';
+  glowX += (e.clientX - glowX) * 0.12;
+  glowY += (e.clientY - glowY) * 0.12;
+  glow.style.left = glowX + 'px';
+  glow.style.top = glowY + 'px';
 });
 
-/* 3D CARD TILT */
+/* 3D CARD TILT - SMOOTH INTERPOLATION */
+let tiltX = 0, tiltY = 0;
 document.addEventListener('mousemove', e => {
   document.querySelectorAll('.card, .whale-card, .hero-stat').forEach(el => {
     const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    const dist = Math.sqrt((e.clientX - (rect.left + rect.width/2))**2 + (e.clientY - (rect.top + rect.height/2))**2);
-    if (dist < 600) {
-      const strength = Math.max(0, 1 - dist / 600) * 6;
-      el.style.transform = `perspective(800px) rotateY(${x * strength}deg) rotateX(${-y * strength}deg) translateY(-2px)`;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
+    if (dist < 700) {
+      const strength = Math.max(0, 1 - dist / 700) * 5;
+      const rx = ((e.clientY - cy) / rect.height * 2) * strength;
+      const ry = ((e.clientX - cx) / rect.width * 2) * strength;
+      el.style.transform = `perspective(900px) rotateX(${-rx}deg) rotateY(${ry}deg) translateY(-1px)`;
     }
   });
 });
 document.addEventListener('mouseleave', () => {
-  document.querySelectorAll('.card, .whale-card, .hero-stat').forEach(el => { el.style.transform = ''; });
+  document.querySelectorAll('.card, .whale-card, .hero-stat').forEach(el => {
+    el.style.transform = '';
+  });
 });
 
 /* ADD SHINE + BORDER TO CARDS */
@@ -507,12 +555,20 @@ function showCoinDetail(coinId) {
       ${sig?.sparkline ? `<div style="display:flex;justify-content:center;margin-top:12px">${sparklineHTML(sig.sparkline, color)}</div>` : ''}
     </div>`;
   modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => {
+    const modalEl = modal.querySelector('.coin-detail-modal');
+    if (modalEl) modalEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 50);
 }
 
 function closeCoinModal() {
-  document.getElementById('coinModal').style.display = 'none';
+  const modal = document.getElementById('coinModal');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 document.getElementById('coinModal').addEventListener('click', closeCoinModal);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCoinModal(); });
 
 /* PRICE ALERTS */
 function addAlert(coinName, targetPrice) {
