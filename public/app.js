@@ -5,16 +5,16 @@ function fmt(n) {
   if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
   if (n >= 1e3) return '$' + (n / 1e3).toFixed(2) + 'K';
   if (n >= 1) return '$' + n.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
-  if (n >= 0.01) return '$' + n.toFixed(4);
+  if (n >= 0.001) return '$' + n.toFixed(4);
   if (n > 0) return '$' + n.toFixed(6);
   return '$0.00';
 }
 function fmtCompact(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
-  if (n >= 1e12) return '$' + (n / 1e12).toFixed(2)+'T';
-  if (n >= 1e9) return '$' + (n / 1e9).toFixed(2)+'B';
-  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2)+'M';
-  if (n >= 1e3) return '$' + (n / 1e3).toFixed(2)+'K';
+  if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+  if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return '$' + (n / 1e3).toFixed(2) + 'K';
   return '$' + n.toFixed(2);
 }
 function fmtPct(n) {
@@ -39,7 +39,7 @@ function sparklineHTML(prices, color) {
   const w=72, h=28, pad=2;
   const mn=Math.min(...prices), mx=Math.max(...prices), r=mx-mn||1;
   const pts = prices.map((v,i)=>`${pad+(i/(prices.length-1))*(w-2*pad)},${pad+(1-(v-mn)/r)*(h-2*pad)}`).join(' ');
-  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" style="color:${color}"><defs><linearGradient id="sg-${pts.length}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.1"/><stop offset="100%" stop-color="${color}" stop-opacity="0.5"/></linearGradient></defs><polyline fill="none" stroke="url(#sg-${pts.length})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
+  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" style="color:${color}"><defs><linearGradient id="sg-${Math.random().toString(36).slice(2,8)}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.08"/><stop offset="100%" stop-color="${color}" stop-opacity="0.5"/></linearGradient></defs><polyline fill="none" stroke="url(#sg-${Math.random().toString(36).slice(2,8)})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
 }
 
 function coinImg(src, alt) {
@@ -49,7 +49,7 @@ function coinImg(src, alt) {
 function signalRingHTML(confidence, color) {
   const r = 13, circ = 2 * Math.PI * r;
   const offset = circ - (circ * (confidence || 0) / 100);
-  return `<div class="signal-ring"><svg viewBox="0 0 30 30"><circle class="ring-bg" cx="15" cy="15" r="${r}"/><circle class="ring-fg" cx="15" cy="15" r="${r}" stroke="${color}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/></svg></div>`;
+  return `<div class="signal-ring"><svg viewBox="0 0 30 30"><circle class="ring-bg" cx="15" cy="15" r="${r}"/><circle class="ring-fg" cx="15" cy="15" r="${r}" stroke="${color}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/></svg><span class="ring-pct">${confidence||0}</span></div>`;
 }
 
 function confidenceHTML(val) {
@@ -67,6 +67,61 @@ function holdHTML(c) {
     ${c.stopLoss ? `<span>SL: <strong style="color:var(--red)">${fmt(c.stopLoss)}</strong></span>` : ''}
     ${c.takeProfit ? `<span>TP: <strong style="color:var(--green)">${fmt(c.takeProfit)}</strong></span>` : ''}
   </div>`;
+}
+
+function animateCounter(el, target, prefix, suffix) {
+  const duration = 800;
+  const start = performance.now();
+  const from = parseFloat(el.dataset.val || 0);
+  function tick(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const val = from + (target - from) * ease;
+    el.textContent = prefix + val.toFixed(prefix.includes('$') ? 2 : 0) + suffix;
+    if (t < 1) requestAnimationFrame(tick);
+    else { el.dataset.val = target; }
+  }
+  requestAnimationFrame(tick);
+}
+
+function renderHeroStats(data) {
+  const el = document.getElementById('heroStats');
+  if (!data.market.global || !data.market.topCoins) { el.innerHTML = ''; return; }
+  const g = data.market.global;
+  const btc = data.market.topCoins.find(c => c.id === 'bitcoin');
+  const eth = data.market.topCoins.find(c => c.id === 'ethereum');
+  const buys = data.signals.buys?.length || 0;
+  const sells = data.signals.sells?.length || 0;
+  el.innerHTML = `
+    <div class="hero-stat">
+      <div class="hero-stat-value" id="heroMcap">${fmtCompact(g.total_market_cap)}</div>
+      <div class="hero-stat-label">Total Market Cap</div>
+      <div class="hero-stat-change" style="color:${chColor(g.market_cap_change_percentage_24h)}">${fmtPct(g.market_cap_change_percentage_24h)}</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value" id="heroVol">${fmtCompact(g.total_volume)}</div>
+      <div class="hero-stat-label">24h Volume</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">${buys + sells}</div>
+      <div class="hero-stat-label">Active Signals</div>
+      <div class="hero-stat-change"><span style="color:var(--green)">${buys} buy</span> / <span style="color:var(--red)">${sells} sell</span></div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">${g.active_cryptocurrencies?.toLocaleString() || '—'}</div>
+      <div class="hero-stat-label">Coins Tracked</div>
+      <div class="hero-stat-change" style="color:var(--text-muted)">${g.market_cap_percentage?.btc?.toFixed(1) || '—'}% BTC dom</div>
+    </div>`;
+}
+
+function renderTicker(coins) {
+  const track = document.getElementById('tickerTrack');
+  if (!coins || !coins.length) return;
+  const items = coins.slice(0, 15).map(c => {
+    const sp = c.price_change_24h || 0;
+    return `<div class="ticker-item"><span class="ticker-symbol">${c.symbol.toUpperCase()}</span><span class="ticker-price">${fmt(c.current_price)}</span><span class="ticker-change" style="color:${chColor(sp)}">${fmtPct(sp)}</span></div><span class="ticker-dot"></span>`;
+  }).join('');
+  track.innerHTML = items + items;
 }
 
 function renderSigList(list, elId, countId) {
@@ -218,100 +273,94 @@ function renderMetrics(global) {
   if (!global) return;
   const btcDom = global.market_cap_percentage?.btc;
   document.getElementById('marketMetrics').innerHTML = `
-    <div class="card metric-box">
-      <div class="metric-value" id="metricMcap">${fmtCompact(global.total_market_cap)}</div>
-      <div class="metric-label">Market Cap</div>
-      <div class="metric-change" style="color:${chColor(global.market_cap_change_percentage_24h)}">${fmtPct(global.market_cap_change_percentage_24h)}</div>
-    </div>
-    <div class="card metric-box">
-      <div class="metric-value" id="metricVolume">${fmtCompact(global.total_volume)}</div>
-      <div class="metric-label">24h Volume</div>
-    </div>
-    <div class="card metric-box">
-      <div class="metric-value">${(global.active_cryptocurrencies||0).toLocaleString()}</div>
-      <div class="metric-label">Coins</div>
-    </div>
-    <div class="card metric-box">
-      <div class="metric-value">${btcDom ? btcDom.toFixed(1)+'%' : '—'}</div>
-      <div class="metric-label">BTC Dom</div>
-    </div>`;
+    <div class="card metric-box"><div class="metric-value">${fmtCompact(global.total_market_cap)}</div><div class="metric-label">Market Cap</div><div class="metric-change" style="color:${chColor(global.market_cap_change_percentage_24h)}">${fmtPct(global.market_cap_change_percentage_24h)}</div></div>
+    <div class="card metric-box"><div class="metric-value">${fmtCompact(global.total_volume)}</div><div class="metric-label">24h Volume</div></div>
+    <div class="card metric-box"><div class="metric-value">${(global.active_cryptocurrencies||0).toLocaleString()}</div><div class="metric-label">Coins</div></div>
+    <div class="card metric-box"><div class="metric-value">${btcDom ? btcDom.toFixed(1)+'%' : '—'}</div><div class="metric-label">BTC Dom</div></div>`;
 }
 
+/* CANVAS PARTICLES */
 const canvas = document.getElementById('bgCanvas');
 const ctx = canvas.getContext('2d');
 let particles = [];
-let animId;
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 function initParticles() {
   particles = [];
-  const count = Math.min(60, Math.floor(window.innerWidth / 20));
+  const count = Math.min(70, Math.floor(window.innerWidth / 18));
   for (let i = 0; i < count; i++) {
     particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      r: Math.random() * 2.5 + 0.5,
-      dx: (Math.random() - 0.5) * 0.3,
-      dy: (Math.random() - 0.5) * 0.3,
-      o: Math.random() * 0.35 + 0.05,
-      hue: Math.random() * 60 + 200,
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+      r: Math.random() * 2.5 + 0.5, dx: (Math.random() - 0.5) * 0.35, dy: (Math.random() - 0.5) * 0.35,
+      o: Math.random() * 0.4 + 0.05, hue: Math.random() * 60 + 200,
     });
   }
 }
 function drawParticles() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const p of particles) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${p.hue}, 70%, 60%, ${p.o})`;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 70%, 60%, ${p.o})`; ctx.fill();
     p.x += p.dx; p.y += p.dy;
-    if (p.x < 0) p.x = canvas.width;
-    if (p.x > canvas.width) p.x = 0;
-    if (p.y < 0) p.y = canvas.height;
-    if (p.y > canvas.height) p.y = 0;
+    if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+    if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
   }
   for (let i = 0; i < particles.length; i++) {
     for (let j = i + 1; j < particles.length; j++) {
-      const dx = particles[i].x - particles[j].x;
-      const dy = particles[i].y - particles[j].y;
+      const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 150) {
-        ctx.beginPath();
-        ctx.moveTo(particles[i].x, particles[i].y);
-        ctx.lineTo(particles[j].x, particles[j].y);
+      if (dist < 160) {
+        ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y);
         const avgHue = (particles[i].hue + particles[j].hue) / 2;
-        ctx.strokeStyle = `hsla(${avgHue}, 60%, 60%, ${0.05 * (1 - dist / 150)})`;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
+        ctx.strokeStyle = `hsla(${avgHue}, 60%, 60%, ${0.06 * (1 - dist / 160)})`; ctx.lineWidth = 0.5; ctx.stroke();
       }
     }
   }
-  animId = requestAnimationFrame(drawParticles);
+  requestAnimationFrame(drawParticles);
 }
 window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
 resizeCanvas(); initParticles(); drawParticles();
 
+/* CURSOR GLOW */
+document.addEventListener('mousemove', e => {
+  const glow = document.getElementById('cursorGlow');
+  glow.style.left = e.clientX + 'px';
+  glow.style.top = e.clientY + 'px';
+});
+
+/* 3D CARD TILT */
+document.addEventListener('mousemove', e => {
+  document.querySelectorAll('.card, .whale-card, .hero-stat').forEach(el => {
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    const dist = Math.sqrt((e.clientX - (rect.left + rect.width/2))**2 + (e.clientY - (rect.top + rect.height/2))**2);
+    if (dist < 600) {
+      const strength = Math.max(0, 1 - dist / 600) * 6;
+      el.style.transform = `perspective(800px) rotateY(${x * strength}deg) rotateX(${-y * strength}deg) translateY(-2px)`;
+    }
+  });
+});
+document.addEventListener('mouseleave', () => {
+  document.querySelectorAll('.card, .whale-card, .hero-stat').forEach(el => { el.style.transform = ''; });
+});
+
+/* ADD SHINE + BORDER TO CARDS */
 document.querySelectorAll('.card').forEach(el => {
   const shine = document.createElement('div');
   shine.className = 'card-shine';
   el.appendChild(shine);
-});
-document.querySelectorAll('.card, .whale-card').forEach(el => {
-  el.addEventListener('mousemove', e => {
-    const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    el.style.transform = `perspective(800px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-2px)`;
-  });
-  el.addEventListener('mouseleave', () => {
-    el.style.transform = '';
-  });
+  const border = document.createElement('div');
+  border.className = 'card-glow-border';
+  el.appendChild(border);
 });
 
+/* SCROLL REVEAL */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-section').forEach(el => observer.observe(el));
+
+/* API */
 async function fetchDashboard() {
   try {
     const res = await fetch('/api/dashboard');
@@ -328,19 +377,20 @@ async function fetchDashboard() {
       setTimeout(fetchDashboard, 5000);
       return;
     }
-    if (data.rateLimited) {
-      document.getElementById('errorBanner').innerHTML = '⚠ CoinGecko rate limit hit. Using CoinCap fallback...';
-      document.getElementById('errorBanner').style.display = 'flex';
-    } else {
-      document.getElementById('errorBanner').style.display = 'none';
-    }
+    document.getElementById('errorBanner').style.display = data.rateLimited ? 'flex' : 'none';
+    if (data.rateLimited) document.getElementById('errorBanner').innerHTML = '⚠ CoinGecko rate limit hit. Using fallback...';
+
+    renderHeroStats(data);
+    renderTicker(data.market.topCoins);
     renderMetrics(data.market.global);
+
     const btc = data.market.topCoins?.find(c => c.id === 'bitcoin');
     const eth = data.market.topCoins?.find(c => c.id === 'ethereum');
     document.getElementById('btcPrice').innerHTML = btc ? `${fmt(btc.current_price)} <span style="color:${chColor(btc.price_change_24h)};font-size:10px">${fmtPct(btc.price_change_24h)}</span>` : '—';
     document.getElementById('ethPrice').innerHTML = eth ? `${fmt(eth.current_price)} <span style="color:${chColor(eth.price_change_24h)};font-size:10px">${fmtPct(eth.price_change_24h)}</span>` : '—';
     document.getElementById('totalMcap').textContent = fmtCompact(data.market.global?.total_market_cap);
     document.getElementById('lastUpdateLabel').textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : '—';
+
     renderSigList(data.signals.buys, 'buySignalsList', 'buyCount');
     renderSigList(data.signals.sells, 'sellSignalsList', 'sellCount');
     renderSigList(data.signals.all, 'allSignalsList', null);

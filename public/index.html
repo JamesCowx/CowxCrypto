@@ -13,11 +13,11 @@
 <body>
   <canvas id="bgCanvas"></canvas>
   <div class="ambient-orbs"></div>
+  <div class="cursor-glow" id="cursorGlow"></div>
 
   <div class="header">
     <div class="header-inner">
       <div class="logo">
-        <div class="logo-ring"></div>
         <div class="logo-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -27,88 +27,115 @@
         <span class="live-dot"></span>
       </div>
       <div class="header-stats" id="headerStats">
-        <div class="header-stat"><span class="label">BTC</span><span class="value" id="btcPrice">--</span></div>
-        <div class="header-stat"><span class="label">ETH</span><span class="value" id="ethPrice">--</span></div>
-        <div class="header-stat"><span class="label">MCap</span><span class="value" id="totalMcap">--</span></div>
-        <div class="header-stat"><span class="label" style="color:var(--text-muted);font-size:10px" id="lastUpdateLabel">--</span></div>
+        <div class="header-stat"><span class="label">BTC</span><span class="value" id="btcPrice">—</span></div>
+        <div class="header-stat"><span class="label">ETH</span><span class="value" id="ethPrice">—</span></div>
+        <div class="header-stat"><span class="label">MCap</span><span class="value" id="totalMcap">—</span></div>
+        <div class="header-stat"><span class="label" style="color:var(--text-muted);font-size:10px" id="lastUpdateLabel">—</span></div>
       </div>
     </div>
+  </div>
+
+  <div class="ticker-bar" id="tickerBar">
+    <div class="ticker-track" id="tickerTrack"></div>
   </div>
 
   <div class="container">
     <div id="errorBanner" class="error-banner" style="display:none"></div>
 
-    <div class="grid grid-4" id="marketMetrics"></div>
+    <section class="hero-stats fade-section" id="heroStats"></section>
 
-    <div class="dual-section" style="margin-top:20px">
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Trending</div>
-        </div>
-        <div id="trendingList"><div class="loading"><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:70%"></div></div></div>
-      </div>
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Market Dominance</div>
-        </div>
-        <div id="dominanceSection"><div class="loading"><div class="skeleton-line" style="width:90%;height:24px"></div><div class="skeleton-line" style="width:70%;height:24px"></div><div class="skeleton-line" style="width:50%;height:24px"></div></div></div>
-      </div>
-    </div>
+    <div class="grid grid-4 fade-section" id="marketMetrics"></div>
 
-    <div class="dual-section" style="margin-top:20px">
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Top Gainers</div>
-        </div>
-        <div id="gainersList"><div class="loading"><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
+    <section class="section-block fade-section">
+      <div class="section-header">
+        <h2 class="section-title">Trending</h2>
+        <span class="section-subtitle">What's hot right now</span>
       </div>
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Top Losers</div>
+      <div class="dual-section">
+        <div class="card card-glow">
+          <div id="trendingList"><div class="loading"><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:70%"></div></div></div>
         </div>
-        <div id="losersList"><div class="loading"><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title">Market Dominance</div>
+          </div>
+          <div id="dominanceSection"><div class="loading"><div class="skeleton-line" style="width:90%;height:24px"></div><div class="skeleton-line" style="width:70%;height:24px"></div><div class="skeleton-line" style="width:50%;height:24px"></div></div></div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="dual-section" style="margin-top:20px">
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Buy Signals</div>
-          <span class="badge badge-buy" id="buyCount">0</span>
-        </div>
-        <div class="scroll-container" id="buySignalsList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:70%"></div><div class="skeleton-line" style="width:85%"></div></div></div>
+    <section class="section-block fade-section">
+      <div class="section-header">
+        <h2 class="section-title">Movers</h2>
+        <span class="section-subtitle">Biggest changes in 24h</span>
       </div>
-      <div class="card card-glow">
-        <div class="card-header">
-          <div class="card-title"><span class="title-accent">⟐</span> Sell Signals</div>
-          <span class="badge badge-sell" id="sellCount">0</span>
+      <div class="dual-section">
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title">Gainers</div>
+          </div>
+          <div id="gainersList"><div class="loading"><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
         </div>
-        <div class="scroll-container" id="sellSignalsList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:70%"></div><div class="skeleton-line" style="width:85%"></div></div></div>
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title">Losers</div>
+          </div>
+          <div id="losersList"><div class="loading"><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card card-glow" style="margin-top:20px">
-      <div class="tab-bar" id="tabBar">
-        <button class="tab active" data-tab="all-signals">All Signals</button>
-        <button class="tab" data-tab="market">Market</button>
-        <button class="tab" data-tab="whales">Whales</button>
-        <button class="tab" data-tab="trades">Trades</button>
+    <section class="section-block fade-section">
+      <div class="section-header">
+        <h2 class="section-title">Signals</h2>
+        <span class="section-subtitle">AI-powered buy & sell signals</span>
       </div>
-      <div id="tabContent">
-        <div class="tab-panel" id="panel-all-signals">
-          <div class="scroll-container" id="allSignalsList"><div class="loading"><div class="skeleton-line" style="width:95%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:88%"></div></div></div>
+      <div class="dual-section">
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title">Buy Signals</div>
+            <span class="badge badge-buy" id="buyCount">0</span>
+          </div>
+          <div class="scroll-container" id="buySignalsList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:70%"></div></div></div>
         </div>
-        <div class="tab-panel" id="panel-market" style="display:none">
-          <div class="scroll-container" id="marketList"><div class="loading"><div class="skeleton-line" style="width:95%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:88%"></div></div></div>
-        </div>
-        <div class="tab-panel" id="panel-whales" style="display:none">
-          <div class="scroll-container" id="whalesList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:85%"></div></div></div>
-        </div>
-        <div class="tab-panel" id="panel-trades" style="display:none">
-          <div class="scroll-container" id="tradesList"><div class="loading"><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:65%"></div><div class="skeleton-line" style="width:75%"></div></div></div>
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title">Sell Signals</div>
+            <span class="badge badge-sell" id="sellCount">0</span>
+          </div>
+          <div class="scroll-container" id="sellSignalsList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:70%"></div></div></div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <section class="section-block fade-section">
+      <div class="section-header">
+        <h2 class="section-title">Intelligence</h2>
+        <span class="section-subtitle">Full market data & whale tracking</span>
+      </div>
+      <div class="card card-glow">
+        <div class="tab-bar" id="tabBar">
+          <button class="tab active" data-tab="all-signals">All Signals</button>
+          <button class="tab" data-tab="market">Market</button>
+          <button class="tab" data-tab="whales">Whales</button>
+          <button class="tab" data-tab="trades">Trades</button>
+        </div>
+        <div id="tabContent">
+          <div class="tab-panel" id="panel-all-signals">
+            <div class="scroll-container" id="allSignalsList"><div class="loading"><div class="skeleton-line" style="width:95%"></div><div class="skeleton-line" style="width:80%"></div></div></div>
+          </div>
+          <div class="tab-panel" id="panel-market" style="display:none">
+            <div class="scroll-container" id="marketList"><div class="loading"><div class="skeleton-line" style="width:95%"></div><div class="skeleton-line" style="width:80%"></div></div></div>
+          </div>
+          <div class="tab-panel" id="panel-whales" style="display:none">
+            <div class="scroll-container" id="whalesList"><div class="loading"><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:75%"></div></div></div>
+          </div>
+          <div class="tab-panel" id="panel-trades" style="display:none">
+            <div class="scroll-container" id="tradesList"><div class="loading"><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:65%"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div class="last-update" id="lastUpdate"></div>
   </div>
