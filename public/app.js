@@ -360,6 +360,49 @@ const observer = new IntersectionObserver(entries => {
 }, { threshold: 0.1 });
 document.querySelectorAll('.fade-section').forEach(el => observer.observe(el));
 
+/* PRICE FLASH EFFECT */
+function flashPrice(el, direction) {
+  const color = direction === 'up' ? 'var(--green)' : 'var(--red)';
+  const glow = direction === 'up' ? 'var(--green-glow)' : 'var(--red-glow)';
+  el.style.color = color;
+  el.style.textShadow = `0 0 10px ${glow}, 0 0 20px ${glow}`;
+  setTimeout(() => {
+    el.style.color = '';
+    el.style.textShadow = '';
+  }, 1000);
+}
+
+/* ANIMATE NUMBERS ON LOAD */
+function animateNumber(el, target, duration = 800) {
+  const start = performance.now();
+  const from = parseFloat(el.textContent.replace(/[^0-9.-]/g, '')) || 0;
+  function update(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current = from + (target - from) * eased;
+    el.textContent = current.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+/* ADD DATA PULSE TO LIVE ELEMENTS */
+document.querySelectorAll('.header-stat .value').forEach(el => {
+  const pulse = document.createElement('span');
+  pulse.className = 'data-pulse';
+  el.parentNode.insertBefore(pulse, el);
+});
+
+/* HOVER EFFECTS FOR CARDS */
+document.querySelectorAll('.card, .hero-stat').forEach(card => {
+  card.addEventListener('mouseenter', () => {
+    card.style.transition = 'all 0.3s cubic-bezier(0.2,0,0,1)';
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.transition = 'all 0.4s cubic-bezier(0.2,0,0,1)';
+  });
+});
+
 /* API */
 async function fetchDashboard() {
   try {
