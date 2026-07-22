@@ -1,5 +1,5 @@
 function fmt(n) {
-  if (n === null || n === undefined || isNaN(n)) return '--';
+  if (n === null || n === undefined || isNaN(n)) return '—';
   if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
   if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
   if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
@@ -10,7 +10,7 @@ function fmt(n) {
   return '$0.00';
 }
 function fmtCompact(n) {
-  if (n === null || n === undefined || isNaN(n)) return '--';
+  if (n === null || n === undefined || isNaN(n)) return '—';
   if (n >= 1e12) return '$' + (n / 1e12).toFixed(2)+'T';
   if (n >= 1e9) return '$' + (n / 1e9).toFixed(2)+'B';
   if (n >= 1e6) return '$' + (n / 1e6).toFixed(2)+'M';
@@ -18,7 +18,7 @@ function fmtCompact(n) {
   return '$' + n.toFixed(2);
 }
 function fmtPct(n) {
-  if (n === null || n === undefined || isNaN(n)) return '--';
+  if (n === null || n === undefined || isNaN(n)) return '—';
   return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 }
 function chColor(n) {
@@ -36,14 +36,20 @@ function sigBadge(t) { return {strong_buy:'badge-strong-buy',buy:'badge-buy',sel
 
 function sparklineHTML(prices, color) {
   if (!prices || prices.length < 2) return '';
-  const w=64, h=24, pad=2;
+  const w=72, h=28, pad=2;
   const mn=Math.min(...prices), mx=Math.max(...prices), r=mx-mn||1;
   const pts = prices.map((v,i)=>`${pad+(i/(prices.length-1))*(w-2*pad)},${pad+(1-(v-mn)/r)*(h-2*pad)}`).join(' ');
-  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="spark-grad-${pts.length}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.1"/><stop offset="100%" stop-color="${color}" stop-opacity="0.4"/></linearGradient></defs><polyline fill="none" stroke="url(#spark-grad-${pts.length})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
+  return `<svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" style="color:${color}"><defs><linearGradient id="sg-${pts.length}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${color}" stop-opacity="0.1"/><stop offset="100%" stop-color="${color}" stop-opacity="0.5"/></linearGradient></defs><polyline fill="none" stroke="url(#sg-${pts.length})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
 }
 
 function coinImg(src, alt) {
   return `<div class="coin-image-wrapper"><img class="coin-image" src="${src}" alt="${alt}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=font-size:16px>🪙</span>'"></div>`;
+}
+
+function signalRingHTML(confidence, color) {
+  const r = 13, circ = 2 * Math.PI * r;
+  const offset = circ - (circ * (confidence || 0) / 100);
+  return `<div class="signal-ring"><svg viewBox="0 0 30 30"><circle class="ring-bg" cx="15" cy="15" r="${r}"/><circle class="ring-fg" cx="15" cy="15" r="${r}" stroke="${color}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/></svg></div>`;
 }
 
 function confidenceHTML(val) {
@@ -69,10 +75,12 @@ function renderSigList(list, elId, countId) {
   if (!list.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No signals</div>'; return; }
   el.innerHTML = list.map((c, i) => {
     const sp = c.priceChange24h ?? 0;
-    const color = sp >= 0 ? '#22d07a' : '#f14550';
+    const color = sp >= 0 ? '#22d07a' : '#ef4444';
     const glow = c.signalType === 'strong_buy' ? ' glow-strong-buy' : '';
-    return `<div class="coin-row${glow}" style="animation-delay:${i*0.035}s">
+    const confColor = (c.confidence || 0) >= 70 ? '#22d07a' : (c.confidence || 0) >= 50 ? '#f5a623' : '#4a8cff';
+    return `<div class="coin-row${glow}" style="animation-delay:${i*0.04}s">
       ${coinImg(c.image, c.name)}
+      ${signalRingHTML(c.confidence, confColor)}
       <div class="coin-info">
         <div class="coin-name">${c.name}</div>
         <div class="coin-symbol">${c.symbol.toUpperCase()} ${c.rsi !== null && c.rsi !== undefined ? `<span style="color:${rsiColor(c.rsi)}">RSI ${c.rsi.toFixed(1)}</span>` : ''} ${c.trend ? `<span style="color:var(--text-muted);font-size:10px">${c.trend}</span>` : ''}</div>
@@ -99,7 +107,7 @@ function renderMarket(coins) {
       <span class="coin-rank">#${c.market_cap_rank || '-'}</span>
       ${coinImg(c.image, c.name)}
       <div class="coin-info"><div class="coin-name">${c.name}</div><div class="coin-symbol">${c.symbol.toUpperCase()}</div></div>
-      ${c.sparkline ? sparklineHTML(c.sparkline, sp >= 0 ? '#22d07a' : '#f14550') : ''}
+      ${c.sparkline ? sparklineHTML(c.sparkline, sp >= 0 ? '#22d07a' : '#ef4444') : ''}
       <div class="coin-price-col">
         <div class="price">${fmt(c.current_price)}</div>
         <div class="change" style="color:${chColor(sp)}">${fmtPct(sp)}</div>
@@ -135,14 +143,14 @@ function renderGainersLosers(gainers, losers) {
   const gEl = document.getElementById('gainersList');
   const lEl = document.getElementById('losersList');
   if (gainers && gainers.length) {
-    gEl.innerHTML = gainers.map((c, i) => `<div class="coin-row" style="animation-delay:${i*0.04}s">
+    gEl.innerHTML = gainers.map((c, i) => `<div class="coin-row gainer-row" style="animation-delay:${i*0.04}s">
       ${coinImg(c.image, c.name)}
       <div class="coin-info"><div class="coin-name">${c.name}</div><div class="coin-symbol">${c.symbol.toUpperCase()}</div></div>
       <div class="coin-price-col"><div class="price" style="color:var(--green)">+${(c.price_change_24h||0).toFixed(2)}%</div></div>
     </div>`).join('');
   }
   if (losers && losers.length) {
-    lEl.innerHTML = losers.map((c, i) => `<div class="coin-row" style="animation-delay:${i*0.04}s">
+    lEl.innerHTML = losers.map((c, i) => `<div class="coin-row loser-row" style="animation-delay:${i*0.04}s">
       ${coinImg(c.image, c.name)}
       <div class="coin-info"><div class="coin-name">${c.name}</div><div class="coin-symbol">${c.symbol.toUpperCase()}</div></div>
       <div class="coin-price-col"><div class="price" style="color:var(--red)">${(c.price_change_24h||0).toFixed(2)}%</div></div>
@@ -224,7 +232,7 @@ function renderMetrics(global) {
       <div class="metric-label">Coins</div>
     </div>
     <div class="card metric-box">
-      <div class="metric-value">${btcDom ? btcDom.toFixed(1)+'%' : '--'}</div>
+      <div class="metric-value">${btcDom ? btcDom.toFixed(1)+'%' : '—'}</div>
       <div class="metric-label">BTC Dom</div>
     </div>`;
 }
@@ -240,15 +248,16 @@ function resizeCanvas() {
 }
 function initParticles() {
   particles = [];
-  const count = Math.min(40, Math.floor(window.innerWidth / 30));
+  const count = Math.min(60, Math.floor(window.innerWidth / 20));
   for (let i = 0; i < count; i++) {
     particles.push({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      r: Math.random() * 2 + 0.5,
-      dx: (Math.random() - 0.5) * 0.25,
-      dy: (Math.random() - 0.5) * 0.25,
-      o: Math.random() * 0.3 + 0.05,
+      r: Math.random() * 2.5 + 0.5,
+      dx: (Math.random() - 0.5) * 0.3,
+      dy: (Math.random() - 0.5) * 0.3,
+      o: Math.random() * 0.35 + 0.05,
+      hue: Math.random() * 60 + 200,
     });
   }
 }
@@ -257,7 +266,7 @@ function drawParticles() {
   for (const p of particles) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(74, 140, 255, ${p.o})`;
+    ctx.fillStyle = `hsla(${p.hue}, 70%, 60%, ${p.o})`;
     ctx.fill();
     p.x += p.dx; p.y += p.dy;
     if (p.x < 0) p.x = canvas.width;
@@ -270,11 +279,12 @@ function drawParticles() {
       const dx = particles[i].x - particles[j].x;
       const dy = particles[i].y - particles[j].y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 120) {
+      if (dist < 150) {
         ctx.beginPath();
         ctx.moveTo(particles[i].x, particles[i].y);
         ctx.lineTo(particles[j].x, particles[j].y);
-        ctx.strokeStyle = `rgba(74, 140, 255, ${0.04 * (1 - dist / 120)})`;
+        const avgHue = (particles[i].hue + particles[j].hue) / 2;
+        ctx.strokeStyle = `hsla(${avgHue}, 60%, 60%, ${0.05 * (1 - dist / 150)})`;
         ctx.lineWidth = 0.5;
         ctx.stroke();
       }
@@ -284,6 +294,23 @@ function drawParticles() {
 }
 window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
 resizeCanvas(); initParticles(); drawParticles();
+
+document.querySelectorAll('.card').forEach(el => {
+  const shine = document.createElement('div');
+  shine.className = 'card-shine';
+  el.appendChild(shine);
+});
+document.querySelectorAll('.card, .whale-card').forEach(el => {
+  el.addEventListener('mousemove', e => {
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    el.style.transform = `perspective(800px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-2px)`;
+  });
+  el.addEventListener('mouseleave', () => {
+    el.style.transform = '';
+  });
+});
 
 async function fetchDashboard() {
   try {
@@ -302,7 +329,7 @@ async function fetchDashboard() {
       return;
     }
     if (data.rateLimited) {
-      document.getElementById('errorBanner').innerHTML = '⚠ CoinGecko rate limit hit. Retrying in 60s...';
+      document.getElementById('errorBanner').innerHTML = '⚠ CoinGecko rate limit hit. Using CoinCap fallback...';
       document.getElementById('errorBanner').style.display = 'flex';
     } else {
       document.getElementById('errorBanner').style.display = 'none';
@@ -310,10 +337,10 @@ async function fetchDashboard() {
     renderMetrics(data.market.global);
     const btc = data.market.topCoins?.find(c => c.id === 'bitcoin');
     const eth = data.market.topCoins?.find(c => c.id === 'ethereum');
-    document.getElementById('btcPrice').innerHTML = btc ? `${fmt(btc.current_price)} <span style="color:${chColor(btc.price_change_24h)};font-size:10px">${fmtPct(btc.price_change_24h)}</span>` : '--';
-    document.getElementById('ethPrice').innerHTML = eth ? `${fmt(eth.current_price)} <span style="color:${chColor(eth.price_change_24h)};font-size:10px">${fmtPct(eth.price_change_24h)}</span>` : '--';
+    document.getElementById('btcPrice').innerHTML = btc ? `${fmt(btc.current_price)} <span style="color:${chColor(btc.price_change_24h)};font-size:10px">${fmtPct(btc.price_change_24h)}</span>` : '—';
+    document.getElementById('ethPrice').innerHTML = eth ? `${fmt(eth.current_price)} <span style="color:${chColor(eth.price_change_24h)};font-size:10px">${fmtPct(eth.price_change_24h)}</span>` : '—';
     document.getElementById('totalMcap').textContent = fmtCompact(data.market.global?.total_market_cap);
-    document.getElementById('lastUpdateLabel').textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : '--';
+    document.getElementById('lastUpdateLabel').textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : '—';
     renderSigList(data.signals.buys, 'buySignalsList', 'buyCount');
     renderSigList(data.signals.sells, 'sellSignalsList', 'sellCount');
     renderSigList(data.signals.all, 'allSignalsList', null);
@@ -323,8 +350,7 @@ async function fetchDashboard() {
     renderDominance(data.market.global);
     renderWhales(data.whales.portfolios);
     renderTrades(data.whales.recentTrades);
-    const provLabel = data.provider === 'coincap' ? 'CoinCap' : 'CoinGecko';
-    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleString() + '  ·  ' + provLabel;
+    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleString();
   } catch (err) {
     document.getElementById('errorBanner').innerHTML = '⚠ Connection error. Retrying...';
     document.getElementById('errorBanner').style.display = 'flex';
